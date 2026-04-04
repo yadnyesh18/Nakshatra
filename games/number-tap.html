@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Number Tap — RehabAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void:         #08090F;
+      --glass:        rgba(255,255,255,0.03);
+      --glass-border: rgba(255,255,255,0.07);
+      --gold:         #C9A84C;
+      --gold-dim:     rgba(201,168,76,0.16);
+      --gold-glow:    rgba(201,168,76,0.45);
+      --blue:         #4A6FA5;
+      --blue-dim:     rgba(74,111,165,0.16);
+      --red:          #C47474;
+      --red-dim:      rgba(196,116,116,0.16);
+      --red-glow:     rgba(196,116,116,0.45);
+      --teal:         #4AA59A;
+      --text:         #F0EDE6;
+      --text-dim:     rgba(240,237,230,0.45);
+      --mono:         'DM Mono', monospace;
+      --sans:         'DM Sans', sans-serif;
+      --serif:        'Cormorant Garamond', serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--void);
+      color: var(--text);
+      font-family: var(--sans);
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 16px 12px;
+    }
+
+    #starfield { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 540px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    .header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .header h1 {
+      font-family: var(--serif);
+      font-size: 1.4rem;
+      font-weight: 300;
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .level-badge {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 5px 13px;
+      border-radius: 100px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      color: var(--text-dim);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .level-badge span { color: var(--gold); }
+
+    /* ── Phase Label ─────────────────────────────── */
+    .phase-label {
+      font-family: var(--mono);
+      font-size: 0.64rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      height: 16px;
+      flex-shrink: 0;
+      transition: color 0.3s;
+    }
+
+    .phase-label.memorize { color: var(--blue); }
+    .phase-label.recall   { color: var(--gold); }
+    .phase-label.success  { color: var(--gold); }
+    .phase-label.fail     { color: var(--red); }
+
+    /* ── Arena ───────────────────────────────────── */
+    .arena {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      max-height: 55vh;
+      border-radius: 20px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Idle overlay */
+    .idle-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      transition: opacity 0.3s;
+    }
+
+    .idle-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .idle-pulse {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.08);
+      animation: idlePulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes idlePulse {
+      0%,100% { transform: scale(1);    opacity: 0.4; }
+      50%      { transform: scale(1.2); opacity: 0.12; }
+    }
+
+    .idle-label {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 0 20px;
+      line-height: 1.6;
+    }
+
+    /* ── Memorize countdown overlay ──────────────── */
+    .memorize-overlay {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(74,111,165,0.8);
+      background: rgba(74,111,165,0.12);
+      border: 1px solid rgba(74,111,165,0.25);
+      padding: 4px 14px;
+      border-radius: 100px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .memorize-overlay.show { opacity: 1; }
+
+    /* ── Number Nodes ─────────────────────────────── */
+    .num-node {
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.25s, border-color 0.25s;
+      border: 2px solid;
+      /* default: memorize state — shows number */
+      background: rgba(74,111,165,0.22);
+      border-color: rgba(74,111,165,0.5);
+      color: var(--text);
+      animation: nodeIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 2;
+    }
+
+    @keyframes nodeIn {
+      from { transform: scale(0); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+
+    /* BLANK state — recall phase (number hidden) */
+    .num-node.blank {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.12);
+      color: transparent;    /* hides the number */
+    }
+
+    .num-node.blank:hover {
+      background: rgba(255,255,255,0.09);
+      border-color: rgba(255,255,255,0.22);
+      transform: scale(1.08);
+    }
+
+    /* Correctly tapped — flash gold then fade out */
+    .num-node.done {
+      background: rgba(201,168,76,0.3);
+      border-color: var(--gold);
+      color: var(--gold);
+      transform: scale(0.85);
+      pointer-events: none;
+      animation: doneFade 0.5s ease forwards;
+    }
+
+    @keyframes doneFade {
+      0%   { opacity: 1; transform: scale(1.15); }
+      40%  { opacity: 1; transform: scale(0.9);  }
+      100% { opacity: 0.25; transform: scale(0.8); }
+    }
+
+    /* Wrong tap shake */
+    .num-node.wrong {
+      background: rgba(196,116,116,0.35) !important;
+      border-color: var(--red) !important;
+      animation: wrongShake 0.4s ease;
+    }
+
+    @keyframes wrongShake {
+      0%,100% { transform: translateX(0); }
+      15%     { transform: translateX(-8px); }
+      35%     { transform: translateX(8px); }
+      55%     { transform: translateX(-5px); }
+      75%     { transform: translateX(5px); }
+    }
+
+    /* ── Timer bar ───────────────────────────────── */
+    .timer-bar-wrap {
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 100px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .timer-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      width: 100%;
+      transition: width 0.12s linear, background 0.5s;
+      background: linear-gradient(90deg, var(--blue), var(--gold));
+    }
+
+    .timer-bar-fill.memorize-bar {
+      background: linear-gradient(90deg, #4A6FA5, #6e9bd4);
+      transition: width 0.12s linear;
+    }
+
+    .timer-bar-fill.danger {
+      background: linear-gradient(90deg, var(--red), #e09070);
+    }
+
+    /* ── Next hint ───────────────────────────────── */
+    .next-hint {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      flex-shrink: 0;
+      height: 14px;
+      transition: all 0.25s;
+    }
+
+    /* ── Feedback ────────────────────────────────── */
+    .feedback {
+      width: 100%;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.07em;
+      text-align: center;
+      min-height: 32px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.25s ease;
+      border: 1px solid var(--glass-border);
+      background: var(--glass);
+      color: var(--text-dim);
+    }
+
+    .feedback.memorize { background: var(--blue-dim);  border-color: rgba(74,111,165,0.35); color: #7ba7d4; }
+    .feedback.recall   { background: var(--gold-dim);  border-color: rgba(201,168,76,0.35); color: var(--gold); }
+    .feedback.success  { background: var(--gold-dim);  border-color: rgba(201,168,76,0.5);  color: var(--gold); }
+    .feedback.fail     { background: var(--red-dim);   border-color: rgba(196,116,116,0.35); color: var(--red); }
+
+    /* ── Stats Bar ───────────────────────────────── */
+    .stats-bar {
+      width: 100%;
+      flex-shrink: 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 7px;
+    }
+
+    .stat {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 0.52rem;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .stat-value.gold { color: var(--gold); }
+    .stat-value.blue { color: #7ba7d4; }
+    .stat-value.teal { color: var(--teal); }
+
+    /* ── Bottom Row ──────────────────────────────── */
+    .bottom-row {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      flex-shrink: 0;
+    }
+
+    .attempts-row { display: flex; gap: 7px; align-items: center; }
+
+    .pip {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 5px var(--gold-glow);
+      transition: all 0.3s;
+    }
+
+    .pip.gone { background: rgba(255,255,255,0.1); box-shadow: none; }
+
+    /* ── Play Button ─────────────────────────────── */
+    .play-btn {
+      background: linear-gradient(135deg, var(--gold) 0%, #a8832a 100%);
+      color: #08090F;
+      border: none;
+      border-radius: 100px;
+      padding: 12px 36px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 20px var(--gold-glow);
+      flex-shrink: 0;
+    }
+
+    .play-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 32px var(--gold-glow); }
+    .play-btn:active:not(:disabled) { transform: scale(0.97); }
+    .play-btn:disabled {
+      background: rgba(255,255,255,0.08);
+      color: var(--text-dim);
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── End Modal ───────────────────────────────── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(8,9,15,0.88);
+      backdrop-filter: blur(20px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    .overlay.show { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 36px 30px;
+      max-width: 380px;
+      width: 92%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      backdrop-filter: blur(24px);
+      text-align: center;
+    }
+
+    .modal-icon { font-size: 2.4rem; }
+
+    .modal h2 {
+      font-family: var(--serif);
+      font-size: 1.8rem;
+      font-weight: 300;
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .modal p {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      line-height: 1.7;
+    }
+
+    .modal-scores {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 9px;
+      width: 100%;
+    }
+
+    .modal-score {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 12px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .modal-score .val {
+      font-family: var(--mono);
+      font-size: 1.15rem;
+      color: var(--gold);
+    }
+
+    .modal-score .lbl {
+      font-family: var(--mono);
+      font-size: 0.52rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+
+<div class="page">
+
+  <header class="header">
+    <h1>Number Tap</h1>
+    <div class="level-badge">LEVEL <span id="level-num">01</span></div>
+  </header>
+
+  <div class="phase-label" id="phase-label">Press Play to begin</div>
+
+  <div class="arena" id="arena">
+    <div class="idle-overlay" id="idle-overlay">
+      <div class="idle-pulse"></div>
+      <span class="idle-label">Numbers appear — memorise positions<br>then tap in order: 1 → 2 → 3…</span>
+    </div>
+    <div class="memorize-overlay" id="mem-overlay">MEMORISE</div>
+  </div>
+
+  <div class="next-hint" id="next-hint"></div>
+
+  <div class="timer-bar-wrap">
+    <div class="timer-bar-fill" id="timer-bar"></div>
+  </div>
+
+  <div class="feedback" id="feedback">Numbers will appear — memorise them, then tap in order.</div>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-label">Score</span>
+      <span class="stat-value gold" id="stat-score">000</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Accuracy</span>
+      <span class="stat-value" id="stat-acc">0%</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Best Level</span>
+      <span class="stat-value blue" id="stat-best">01</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Avg Speed</span>
+      <span class="stat-value teal" id="stat-speed">--s</span>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="attempts-row" id="attempts-row">
+      <div class="pip" id="pip-0"></div>
+      <div class="pip" id="pip-1"></div>
+      <div class="pip" id="pip-2"></div>
+    </div>
+    <button class="play-btn" id="play-btn">[ PLAY ]</button>
+  </div>
+
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-icon" id="m-icon">🧠</div>
+    <h2 id="m-title">Session Complete</h2>
+    <p id="m-msg">Your executive function summary.</p>
+    <div class="modal-scores">
+      <div class="modal-score">
+        <span class="val" id="m-score">--</span>
+        <span class="lbl">Cog Score</span>
+      </div>
+      <div class="modal-score">
+        <span class="val" id="m-acc">--</span>
+        <span class="lbl">Accuracy</span>
+      </div>
+      <div class="modal-score">
+        <span class="val" id="m-level">--</span>
+        <span class="lbl">Best Level</span>
+      </div>
+    </div>
+    <button class="play-btn" id="restart-btn" style="width:100%">[ PLAY AGAIN ]</button>
+  </div>
+</div>
+
+<script>
+/* ── Starfield ─────────────────────────────────── */
+(function () {
+  var c = document.getElementById('starfield');
+  var ctx = c.getContext('2d');
+  var stars = [];
+  function resize() { c.width = innerWidth; c.height = innerHeight; }
+  function init() {
+    stars = [];
+    for (var i = 0; i < 100; i++) {
+      stars.push({
+        x: Math.random() * c.width,
+        y: Math.random() * c.height,
+        r: Math.random() * 0.9 + 0.2,
+        a: Math.random(),
+        sp: Math.random() * 0.004 + 0.001
+      });
+    }
+  }
+  function draw() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    for (var i = 0; i < stars.length; i++) {
+      var p = stars[i];
+      p.a += p.sp;
+      var al = (Math.sin(p.a) + 1) / 2 * 0.4 + 0.05;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(240,237,230,' + al + ')';
+      ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  resize(); init(); draw();
+  window.addEventListener('resize', function() { resize(); init(); });
+})();
+
+/* ── Voice ─────────────────────────────────────── */
+var Voice = (function () {
+  var last = 0;
+  var sy = window.speechSynthesis;
+  return {
+    say: function(text, urgent) {
+      var now = Date.now();
+      var gap = urgent ? 800 : 3500;
+      if (now - last < gap) return;
+      if (sy && sy.speaking) sy.cancel();
+      if (!sy) return;
+      var u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.9; u.pitch = 1; u.volume = 1;
+      sy.speak(u);
+      last = now;
+    }
+  };
+})();
+
+/* ── Game ──────────────────────────────────────── */
+(function () {
+  var MAX_LEVELS   = 20;
+  var START_ATTS   = 3;
+  var NODE_W       = 52;
+  var NODE_H       = 52;
+  var NODE_PAD     = 14;
+  var MEMORIZE_MS  = 3000;   /* how long numbers stay visible */
+
+  /* nodes per level: lvl 1 = 3, capped at 12 */
+  function nodesForLevel(lvl) { return Math.min(lvl + 2, 12); }
+
+  /* recall time limit: starts 45s, shrinks 2s per level, min 18s */
+  function recallLimit(lvl) { return Math.max(18, 45 - (lvl - 1) * 2); }
+
+  /* ── State ── */
+  var phase          = 'idle';   /* idle | memorize | recall | over */
+  var level          = 1;
+  var score          = 0;
+  var totalTaps      = 0;
+  var correctTaps    = 0;
+  var bestLevel      = 1;
+  var attemptsLeft   = START_ATTS;
+  var levelTimes     = [];
+  var nextExpected   = 1;
+  var nodeCount      = 0;
+  var recallStart    = 0;
+  var timerHandle    = null;
+  var memTimerHandle = null;
+
+  /* ── DOM ── */
+  var arena       = document.getElementById('arena');
+  var overlay     = document.getElementById('overlay');
+  var playBtn     = document.getElementById('play-btn');
+  var feedbackEl  = document.getElementById('feedback');
+  var nextHintEl  = document.getElementById('next-hint');
+  var timerBar    = document.getElementById('timer-bar');
+  var idleOvl     = document.getElementById('idle-overlay');
+  var memOvl      = document.getElementById('mem-overlay');
+
+  /* ── Helpers ── */
+  function el(id) { return document.getElementById(id); }
+
+  function setLabel(text, cls) {
+    var pl = el('phase-label');
+    pl.textContent = text;
+    pl.className = 'phase-label' + (cls ? ' ' + cls : '');
+  }
+
+  function setFeedback(text, cls) {
+    feedbackEl.textContent = text;
+    feedbackEl.className = 'feedback' + (cls ? ' ' + cls : '');
+  }
+
+  function updateStats() {
+    var acc = totalTaps > 0 ? Math.round((correctTaps / totalTaps) * 100) : 0;
+    var avgStr = '--s';
+    if (levelTimes.length > 0) {
+      var sum = 0;
+      for (var i = 0; i < levelTimes.length; i++) sum += levelTimes[i];
+      avgStr = (sum / levelTimes.length).toFixed(1) + 's';
+    }
+    el('stat-score').textContent = ('000' + score).slice(-3);
+    el('stat-acc').textContent   = acc + '%';
+    el('stat-best').textContent  = ('0' + bestLevel).slice(-2);
+    el('stat-speed').textContent = avgStr;
+    el('level-num').textContent  = ('0' + level).slice(-2);
+  }
+
+  function renderPips() {
+    for (var i = 0; i < START_ATTS; i++) {
+      var pip = el('pip-' + i);
+      if (!pip) continue;
+      pip.className = 'pip' + (i < attemptsLeft ? '' : ' gone');
+    }
+  }
+
+  /* ── Node placement ── */
+  function placeNodes(count) {
+    var W = Math.max(180, arena.offsetWidth  - NODE_W - NODE_PAD * 2);
+    var H = Math.max(120, arena.offsetHeight - NODE_H - NODE_PAD * 2);
+    var placed = [];
+
+    for (var n = 1; n <= count; n++) {
+      var x, y, ok, attempts = 0;
+      do {
+        x = NODE_PAD + Math.random() * W;
+        y = NODE_PAD + Math.random() * H;
+        ok = true;
+        for (var j = 0; j < placed.length; j++) {
+          var dx = placed[j].x - x, dy = placed[j].y - y;
+          if (Math.sqrt(dx*dx + dy*dy) < NODE_W + 12) { ok = false; break; }
+        }
+        attempts++;
+      } while (!ok && attempts < 150);
+
+      placed.push({ x: x, y: y });
+      buildNode(n, x, y);
+    }
+  }
+
+  function buildNode(num, x, y) {
+    var el = document.createElement('div');
+    el.className = 'num-node';
+    el.textContent = num;
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    el.dataset.num = String(num);
+    el.addEventListener('click', function() { handleTap(num, el); });
+    arena.appendChild(el);
+  }
+
+  function clearNodes() {
+    var nodes = arena.querySelectorAll('.num-node');
+    for (var i = 0; i < nodes.length; i++) nodes[i].remove();
+  }
+
+  /* ── Timer bar ── */
+  function startRecallTimer() {
+    clearInterval(timerHandle);
+    recallStart = Date.now();
+    var limit = recallLimit(level) * 1000;
+    timerBar.style.width = '100%';
+    timerBar.className = 'timer-bar-fill';
+
+    timerHandle = setInterval(function() {
+      var elapsed = Date.now() - recallStart;
+      var pct = Math.max(0, 1 - elapsed / limit);
+      timerBar.style.width = (pct * 100) + '%';
+      if (pct < 0.3) timerBar.className = 'timer-bar-fill danger';
+      if (pct <= 0) {
+        clearInterval(timerHandle);
+        onTimeout();
+      }
+    }, 80);
+  }
+
+  function stopTimers() {
+    clearInterval(timerHandle);
+    clearInterval(memTimerHandle);
+  }
+
+  /* ── Memorize phase ── */
+  function startMemorize() {
+    phase = 'memorize';
+    idleOvl.classList.add('hidden');
+    memOvl.classList.add('show');
+    timerBar.style.width = '100%';
+    timerBar.className = 'timer-bar-fill memorize-bar';
+
+    setLabel('Memorise the positions!', 'memorize');
+    setFeedback(
+      'Level ' + level + ' — ' + nodeCount + ' numbers. Memorise in ' + (MEMORIZE_MS / 1000) + 's…',
+      'memorize'
+    );
+
+    /* count down the memorize bar */
+    var started = Date.now();
+    memTimerHandle = setInterval(function() {
+      var pct = Math.max(0, 1 - (Date.now() - started) / MEMORIZE_MS);
+      timerBar.style.width = (pct * 100) + '%';
+    }, 50);
+
+    Voice.say('Level ' + level + '. Memorise ' + nodeCount + ' numbers.', true);
+
+    setTimeout(function() {
+      clearInterval(memTimerHandle);
+      startRecall();
+    }, MEMORIZE_MS);
+  }
+
+  /* ── Recall phase (blank nodes) ── */
+  function startRecall() {
+    phase = 'recall';
+    memOvl.classList.remove('show');
+
+    /* hide all numbers */
+    var nodes = arena.querySelectorAll('.num-node');
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].classList.add('blank');
+    }
+
+    nextExpected = 1;
+    nextHintEl.innerHTML = 'Tap <strong style="color:var(--gold)">' + nextExpected + '</strong> first';
+
+    setLabel('Recall! Tap 1 → 2 → 3…', 'recall');
+    setFeedback('Numbers hidden — tap them in order from memory!', 'recall');
+
+    startRecallTimer();
+  }
+
+  /* ── Tap handler ── */
+  function handleTap(num, nodeEl) {
+    if (phase !== 'recall') return;
+
+    totalTaps++;
+
+    if (num === nextExpected) {
+      /* ✅ Correct */
+      correctTaps++;
+      nodeEl.classList.remove('blank', 'wrong');
+      nodeEl.classList.add('done');
+      /* reveal the number briefly when tapped correctly */
+      nodeEl.textContent = num;
+      nodeEl.style.color = 'var(--gold)';
+
+      nextExpected++;
+
+      if (nextExpected <= nodeCount) {
+        nextHintEl.innerHTML = 'Tap <strong style="color:var(--gold)">' + nextExpected + '</strong> next';
+      } else {
+        /* All tapped! */
+        nextHintEl.textContent = '';
+        onLevelComplete();
+      }
+
+    } else {
+      /* ❌ Wrong — shake, decrement attempts, but KEEP phase = 'recall' */
+      nodeEl.classList.remove('wrong');
+      /* force reflow so animation restarts */
+      void nodeEl.offsetWidth;
+      nodeEl.classList.add('wrong');
+
+      setTimeout(function() {
+        nodeEl.classList.remove('wrong');
+      }, 420);
+
+      attemptsLeft--;
+      renderPips();
+      updateStats();
+
+      /* Briefly show error message then restore recall label */
+      setLabel('Wrong! Keep trying…', 'fail');
+      setFeedback(
+        'Wrong! Tap ' + nextExpected + ' — ' + attemptsLeft + ' attempt' + (attemptsLeft !== 1 ? 's' : '') + ' left.',
+        'fail'
+      );
+
+      setTimeout(function() {
+        if (phase === 'recall') {
+          setLabel('Recall! Tap 1 → 2 → 3…', 'recall');
+          setFeedback('Numbers hidden — tap them in order from memory!', 'recall');
+        }
+      }, 1200);
+
+      if (attemptsLeft <= 0) {
+        stopTimers();
+        setTimeout(showEndModal, 900);
+      }
+    }
+  }
+
+  /* ── Level Complete ── */
+  function onLevelComplete() {
+    stopTimers();
+    var elapsed = (Date.now() - recallStart) / 1000;
+    levelTimes.push(elapsed);
+    bestLevel = Math.max(bestLevel, level);
+
+    var pts = Math.round(nodeCount * 120 + Math.max(0, recallLimit(level) - elapsed) * 12);
+    score += pts;
+    updateStats();
+
+    setLabel('Level ' + level + ' complete!', 'success');
+    setFeedback('All ' + nodeCount + ' numbers recalled in ' + elapsed.toFixed(1) + 's  +' + pts + ' pts', 'success');
+    Voice.say('Level ' + level + ' complete!', true);
+
+    timerBar.style.width = '100%';
+    timerBar.className = 'timer-bar-fill';
+
+    if (level >= MAX_LEVELS) {
+      setTimeout(showEndModal, 1400);
+      return;
+    }
+
+    level++;
+    attemptsLeft = START_ATTS;
+    renderPips();
+
+    /* Auto advance to next level after 1.8s */
+    setTimeout(function() {
+      kickoffLevel();
+    }, 1800);
+  }
+
+  /* ── Timeout ── */
+  function onTimeout() {
+    if (phase !== 'recall') return;
+    attemptsLeft--;
+    renderPips();
+    updateStats();
+
+    setLabel("Time's up!", 'fail');
+    setFeedback("Time's up! " + attemptsLeft + ' attempt' + (attemptsLeft !== 1 ? 's' : '') + ' left.', 'fail');
+    Voice.say("Time's up! Try faster.", true);
+
+    if (attemptsLeft <= 0) {
+      setTimeout(showEndModal, 900);
+      return;
+    }
+
+    /* Retry same level */
+    setTimeout(function() {
+      clearNodes();
+      kickoffLevel();
+    }, 1600);
+  }
+
+  /* ── Kick off a level (place nodes → memorize → recall) ── */
+  function kickoffLevel() {
+    stopTimers();
+    clearNodes();
+    nextExpected = 1;
+    nodeCount = nodesForLevel(level);
+    nextHintEl.textContent = '';
+    timerBar.style.width = '100%';
+    timerBar.className = 'timer-bar-fill';
+    updateStats();
+    placeNodes(nodeCount);
+    startMemorize();
+  }
+
+  /* ── End Modal ── */
+  function showEndModal() {
+    stopTimers();
+    clearNodes();
+    phase = 'over';
+    idleOvl.classList.remove('hidden');
+    nextHintEl.textContent = '';
+    timerBar.style.width = '0%';
+    setLabel('Session ended', '');
+
+    var acc = totalTaps > 0 ? Math.round((correctTaps / totalTaps) * 100) : 0;
+    var avgSec = 30;
+    if (levelTimes.length > 0) {
+      var sum = 0;
+      for (var i = 0; i < levelTimes.length; i++) sum += levelTimes[i];
+      avgSec = sum / levelTimes.length;
+    }
+
+    var lvlScore   = Math.round((bestLevel / MAX_LEVELS) * 100);
+    var speedScore = Math.max(0, Math.round(100 - (avgSec / recallLimit(level)) * 100));
+    var cog        = Math.round(acc * 0.45 + speedScore * 0.35 + lvlScore * 0.2);
+
+    el('m-score').textContent = cog + '%';
+    el('m-acc').textContent   = acc + '%';
+    el('m-level').textContent = 'L' + bestLevel;
+
+    var good = cog >= 70;
+    el('m-icon').textContent  = good ? '🧠' : cog >= 45 ? '⭐' : '💙';
+    el('m-title').textContent = good ? 'Sharp Mind' : cog >= 45 ? 'Good Focus' : 'Keep Training';
+    el('m-msg').textContent   = 'Level ' + bestLevel + ' reached — ' + acc + '% accuracy. ' +
+      (good ? 'Excellent spatial memory!' : 'Consistent practice improves recall.');
+
+    Voice.say('Session over. Score: ' + cog + ' percent.', true);
+    overlay.classList.add('show');
+  }
+
+  /* ── Init / Reset ── */
+  function init() {
+    stopTimers();
+    clearNodes();
+    phase = 'idle';
+    level = 1; score = 0; totalTaps = 0; correctTaps = 0;
+    bestLevel = 1; attemptsLeft = START_ATTS; levelTimes = [];
+    nextExpected = 1; nodeCount = 0;
+
+    timerBar.style.width = '100%';
+    timerBar.className = 'timer-bar-fill';
+    idleOvl.classList.remove('hidden');
+    memOvl.classList.remove('show');
+    nextHintEl.textContent = '';
+
+    renderPips();
+    updateStats();
+    setLabel('Press Play to begin', '');
+    setFeedback('Numbers will appear — memorise them, then tap in order.');
+
+    playBtn.disabled = false;
+    playBtn.textContent = '[ PLAY ]';
+  }
+
+  /* ── Wire buttons ── */
+  playBtn.onclick = function() {
+    if (phase === 'idle') {
+      playBtn.disabled = true;
+      kickoffLevel();
+    }
+  };
+
+  el('restart-btn').onclick = function() {
+    overlay.classList.remove('show');
+    init();
+  };
+
+  init();
+})();
+</script>
+</body>
+</html>
