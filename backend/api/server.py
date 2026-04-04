@@ -13,7 +13,7 @@ import json
 import os
 import threading
 import time
-
+from logic.llm_orchestrator import get_personalized_physical_feedback,generate_session_report
 import cv2
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
@@ -317,6 +317,41 @@ async def sse_events(request: Request):
             await asyncio.sleep(0.1)
     return EventSourceResponse(generator())
 
+class CoachRequest(BaseModel):
+    exercise: str
+    reps: int
+    avg_angle: float
+    strain_events: int
+
+# ── AI Coaching ────────────────────────────────────────────────────────────── 
+@app.post("/session/coach")
+def get_ai_coaching(body: CoachRequest):
+    """
+    The frontend calls this whenever it wants real-time feedback (e.g., every 5 reps).
+    It uses Gemini to generate a fast, motivational correction.
+    """
+    try:
+        # We format the 'form issues' based on the strain events detected by your BodyAnalyzer
+        issues = f"Patient had {body.strain_events} strain events." if body.strain_events > 0 else "None"
+        
+        # Safely extract the target angle from the EXERCISES dictionary
+        exercise_config = EXERCISES.get(body.exercise, {})
+        stages = exercise_config.get("stages", [{}])
+        
+        # Safely get correct_max from the first stage, fallback to 180
+        target = stages.get("correct_max", 180) if stages else 180
+        
+        feedback = generate_live_physical_feedback(
+            exercise=body.exercise,
+            target=int(target),
+            achieved=int(body.avg_angle),
+            issues=issues
+        )
+        return {"coach_feedback": feedback}
+    except Exception as e:
+        # It is helpful to print the error to the terminal during the hackathon so you know WHY it failed
+        print(f"Coach endpoint error: {e}") 
+        return {"coach_feedback": "Keep up the good work! Focus on your form."}
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
