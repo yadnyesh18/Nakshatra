@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<title>Rehab Pose Tracker</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --border:    #30363d;
+    --accent:    #58a6ff;
+    --green:     #3fb950;
+    --orange:    #d29922;
+    --red:       #f85149;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --radius:    12px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ───────────────────────────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  header h1 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: .3px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  header h1 span.dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--red);
+    display: inline-block;
+    transition: background .3s;
+  }
+
+  header h1 span.dot.live { background: var(--green); animation: pulse 1.4s infinite; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: .4; }
+  }
+
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  /* ── Layout ───────────────────────────────────────────────────────────── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    grid-template-rows: auto 1fr;
+    gap: 16px;
+    padding: 16px 24px;
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* ── Control bar ──────────────────────────────────────────────────────── */
+  .controls {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  select, button {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: .9rem;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+
+  select:hover, button:hover { border-color: var(--accent); }
+
+  button.primary {
+    background: var(--accent);
+    color: #0d1117;
+    font-weight: 600;
+    border-color: var(--accent);
+  }
+
+  button.primary:hover { background: #79c0ff; }
+
+  button.danger {
+    background: transparent;
+    color: var(--red);
+    border-color: var(--red);
+  }
+
+  button.danger:hover { background: rgba(248,81,73,.12); }
+
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .exercise-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    font-size: .82rem;
+    cursor: pointer;
+    transition: all .2s;
+    background: transparent;
+    color: var(--muted);
+  }
+
+  .pill:hover { border-color: var(--accent); color: var(--accent); }
+  .pill.active { background: var(--accent); color: #0d1117; border-color: var(--accent); font-weight: 600; }
+
+  /* ── Video panel ──────────────────────────────────────────────────────── */
+  .video-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 420px;
+  }
+
+  .video-panel img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .video-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+  }
+
+  .video-placeholder svg { opacity: .35; }
+
+  /* ── Side panel ───────────────────────────────────────────────────────── */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ── Card ─────────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+  }
+
+  .card-title {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── Status badge ─────────────────────────────────────────────────────── */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    width: 100%;
+    justify-content: center;
+    transition: all .3s;
+    background: rgba(139,148,158,.1);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .status-badge.correct  { background: rgba(63,185,80,.15);  color: var(--green);  border-color: var(--green); }
+  .status-badge.partial  { background: rgba(210,153,34,.15); color: var(--orange); border-color: var(--orange); }
+  .status-badge.incorrect{ background: rgba(248,81,73,.15);  color: var(--red);    border-color: var(--red); }
+
+  /* ── Angle gauge ──────────────────────────────────────────────────────── */
+  .gauge-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .gauge-svg { width: 160px; height: 90px; overflow: visible; }
+
+  .gauge-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .gauge-label { font-size: .78rem; color: var(--muted); }
+
+  /* ── Stat grid ────────────────────────────────────────────────────────── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+
+  .stat-box .val {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.1;
+  }
+
+  .stat-box .lbl {
+    font-size: .72rem;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  /* ── Accuracy bar ─────────────────────────────────────────────────────── */
+  .acc-bar-wrap { display: flex; flex-direction: column; gap: 6px; }
+
+  .acc-bar-track {
+    height: 10px;
+    background: var(--bg);
+    border-radius: 99px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .acc-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--red), var(--orange), var(--green));
+    background-size: 200% 100%;
+    transition: width .5s ease;
+    width: 0%;
+  }
+
+  .acc-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: .72rem;
+    color: var(--muted);
+  }
+
+  /* ── Feedback text ────────────────────────────────────────────────────── */
+  .feedback-text {
+    font-size: .92rem;
+    color: var(--text);
+    min-height: 40px;
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: color .3s;
+  }
+
+  /* ── Session summary ──────────────────────────────────────────────────── */
+  .summary-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  .summary-table td { padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  .summary-table td:first-child { color: var(--muted); }
+  .summary-table td:last-child  { text-align: right; font-weight: 600; }
+  .summary-table tr:last-child td { border-bottom: none; }
+
+  /* ── Toast ────────────────────────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: .88rem;
+    color: var(--text);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all .3s;
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ── Body analysis card ─────────────────────────────────────────────────── */
+  .calib-pending {
+    font-size: .82rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 6px 0;
+  }
+
+  .calib-bar-track {
+    height: 8px;
+    background: var(--bg);
+    border-radius: 99px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin: 8px 0 4px;
+  }
+
+  .calib-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #58a6ff, #3fb950);
+    width: 0%;
+    transition: width .3s ease;
+  }
+
+  .body-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .body-stat {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .body-lbl { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .body-val { font-size: .88rem; font-weight: 600; color: var(--accent); }
+
+  /* ── Rep counter card ─────────────────────────────────────────────────────────── */
+  .rep-counter-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .rep-ring-wrap {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    flex-shrink: 0;
+  }
+
+  .rep-ring-wrap svg { position: absolute; top: 0; left: 0; }
+
+  .rep-ring-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .rep-ring-num span {
+    font-size: .6rem;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .rep-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .rep-state-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: .78rem;
+    font-weight: 600;
+    width: fit-content;
+    transition: all .3s;
+    background: rgba(139,148,158,.1);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .rep-state-badge.state-rest     { background: rgba(139,148,158,.1); color: var(--muted);   border-color: var(--border); }
+  .rep-state-badge.state-moving   { background: rgba(210,153,34,.15); color: var(--orange);  border-color: var(--orange); }
+  .rep-state-badge.state-holding  { background: rgba(88,166,255,.15); color: var(--accent);  border-color: var(--accent); }
+  .rep-state-badge.state-complete { background: rgba(63,185,80,.15);  color: var(--green);   border-color: var(--green); }
+
+  .rep-hold-wrap { display: flex; flex-direction: column; gap: 4px; }
+
+  .rep-hold-track {
+    height: 6px;
+    background: var(--bg);
+    border-radius: 99px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .rep-hold-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    width: 0%;
+    transition: width .2s ease;
+  }
+
+  .rep-hold-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: .7rem;
+    color: var(--muted);
+  }
+
+  /* ── Responsive ───────────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .side-panel { flex-direction: row; flex-wrap: wrap; }
+    .side-panel .card { flex: 1 1 200px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<header>
+  <h1>
+    <span class="dot" id="liveDot"></span>
+    Rehab Pose Tracker
+  </h1>
+  <div class="header-right">
+    <span id="headerExercise" style="font-size:.85rem;color:var(--muted)">No session</span>
+  </div>
+</header>
+
+<!-- ── Main ────────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="exercise-pills" id="exercisePills"></div>
+    <div id="stagePills" class="exercise-pills" style="margin-left:8px"></div>
+    <button class="primary" id="btnStart">▶ Start Session</button>
+    <button class="danger"   id="btnStop" disabled>■ Stop</button>
+    <span id="strainBadge" style="display:none;background:rgba(248,81,73,.2);color:#f85149;border:1px solid #f85149;border-radius:8px;padding:6px 14px;font-size:.82rem;font-weight:600">⚠ Strain detected</span>
+  </div>
+
+  <!-- Video -->
+  <div class="video-panel" id="videoPanel">
+    <div class="video-placeholder" id="videoPlaceholder">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M15 10l4.553-2.277A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+      </svg>
+      <p>Select an exercise and press Start</p>
+    </div>
+    <img id="videoFeed" src="" alt="Live feed" style="display:none" />
+  </div>
+
+  <!-- Side panel -->
+  <div class="side-panel">
+
+  <!-- Rep Counter -->
+    <div class="card">
+      <div class="card-title">Rep Counter</div>
+      <div class="rep-counter-wrap">
+
+        <!-- Circular ring -->
+        <div class="rep-ring-wrap">
+          <svg width="96" height="96" viewBox="0 0 96 96">
+            <!-- Track -->
+            <circle cx="48" cy="48" r="40" fill="none" stroke="#30363d" stroke-width="8"/>
+            <!-- Hold progress ring -->
+            <circle id="repRing" cx="48" cy="48" r="40" fill="none"
+                    stroke="#58a6ff" stroke-width="8" stroke-linecap="round"
+                    stroke-dasharray="251" stroke-dashoffset="251"
+                    transform="rotate(-90 48 48)"
+                    style="transition: stroke-dashoffset .25s ease, stroke .3s ease"/>
+          </svg>
+          <div class="rep-ring-num">
+            <div id="repCount">0</div>
+            <span>reps</span>
+          </div>
+        </div>
+
+        <!-- State + hold bar -->
+        <div class="rep-details">
+          <div class="rep-state-badge state-rest" id="repStateBadge">&#9679; Rest</div>
+
+          <div class="rep-hold-wrap">
+            <div class="rep-hold-label">
+              <span>Hold</span>
+              <span id="repHoldPct">0%</span>
+            </div>
+            <div class="rep-hold-track">
+              <div class="rep-hold-fill" id="repHoldBar"></div>
+            </div>
+          </div>
+
+          <div style="font-size:.72rem;color:var(--muted)">
+            Strain: <span id="repStrain" style="color:#f85149;font-weight:600">0</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="card">
+      <div class="card-title">Posture Status</div>
+      <div class="status-badge" id="statusBadge">— Waiting —</div>
+      <div class="feedback-text" id="feedbackText" style="margin-top:12px">
+        Start a session to see real-time feedback.
+      </div>
+    </div>
+
+    <!-- Angle gauge -->
+    <div class="card">
+      <div class="card-title">Elbow Angle</div>
+      <div class="gauge-wrap">
+        <svg class="gauge-svg" viewBox="0 0 160 90">
+          <!-- Track arc -->
+          <path d="M10,80 A70,70 0 0,1 150,80" fill="none" stroke="#30363d" stroke-width="12" stroke-linecap="round"/>
+          <!-- Fill arc -->
+          <path id="gaugeArc" d="M10,80 A70,70 0 0,1 150,80" fill="none"
+                stroke="#58a6ff" stroke-width="12" stroke-linecap="round"
+                stroke-dasharray="220" stroke-dashoffset="220"
+                style="transition: stroke-dashoffset .4s ease, stroke .4s ease"/>
+          <!-- Correct zone markers -->
+          <line id="markerMin" x1="0" y1="0" x2="0" y2="0" stroke="#3fb950" stroke-width="2" opacity=".7"/>
+          <line id="markerMax" x1="0" y1="0" x2="0" y2="0" stroke="#3fb950" stroke-width="2" opacity=".7"/>
+        </svg>
+        <div class="gauge-value" id="gaugeValue">—°</div>
+        <div class="gauge-label" id="gaugeRange">Correct range: —°</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-title">Session Stats</div>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="val" id="statReps">0</div>
+          <div class="lbl">Reps</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statPeak">—°</div>
+          <div class="lbl">Peak Angle</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statDuration">0s</div>
+          <div class="lbl">Duration</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statAvgAngle">—°</div>
+          <div class="lbl">Avg Angle</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statFrames">0</div>
+          <div class="lbl">Frames</div>
+        </div>
+      </div>
+
+      <!-- Accuracy bar -->
+      <div class="acc-bar-wrap" style="margin-top:14px">
+        <div style="display:flex;justify-content:space-between;font-size:.78rem">
+          <span style="color:var(--muted)">Accuracy</span>
+          <span id="accPct" style="font-weight:600">0%</span>
+        </div>
+        <div class="acc-bar-track">
+          <div class="acc-bar-fill" id="accBar"></div>
+        </div>
+        <div class="acc-bar-labels"><span>0%</span><span>50%</span><span>100%</span></div>
+      </div>
+
+      <!-- Hold progress -->
+      <div class="acc-bar-wrap" style="margin-top:10px" id="holdWrap">
+        <div style="display:flex;justify-content:space-between;font-size:.78rem">
+          <span style="color:var(--muted)">Hold Progress</span>
+          <span id="holdPct" style="font-weight:600">0%</span>
+        </div>
+        <div class="acc-bar-track">
+          <div class="acc-bar-fill" id="holdBar" style="background:linear-gradient(90deg,#58a6ff,#3fb950)"></div>
+        </div>
+      </div>
+
+      <!-- Strain events -->
+      <div style="margin-top:10px;display:flex;justify-content:space-between;font-size:.82rem">
+        <span style="color:var(--muted)">Strain Events</span>
+        <span id="statStrain" style="font-weight:600;color:#f85149">0</span>
+      </div>
+    </div>
+
+    <!-- Body analysis -->
+    <div class="card" id="bodyCard">
+      <div class="card-title">Body Analysis</div>
+      <div id="calibStatus" class="calib-pending">Stand in frame to begin calibration</div>
+      <div class="calib-bar-track" id="calibTrack" style="display:none">
+        <div class="calib-bar-fill" id="calibBar"></div>
+      </div>
+      <div class="body-grid" id="bodyGrid" style="display:none">
+        <div class="body-stat">
+          <span class="body-lbl">Build</span>
+          <span class="body-val" id="bBuild">—</span>
+        </div>
+        <div class="body-stat">
+          <span class="body-lbl">Shoulders</span>
+          <span class="body-val" id="bShoulders">—</span>
+        </div>
+        <div class="body-stat">
+          <span class="body-lbl">Arms</span>
+          <span class="body-val" id="bArms">—</span>
+        </div>
+        <div class="body-stat">
+          <span class="body-lbl">Threshold adj.</span>
+          <span class="body-val" id="bOffset">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- All exercises reference -->
+    <div class="card">
+      <div class="card-title">All Exercises</div>
+      <table class="summary-table" id="exerciseTable"></table>
+    </div>
+
+  </div><!-- /side-panel -->
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+// Exercises are injected by the server into window.__EXERCISES__ at page load.
+// No async fetch needed — they are available immediately.
+let exercises   = window.__EXERCISES__ || {};
+let activeEx    = null;
+let activeStage = 0;
+let sessionLive = false;
+let evtSource   = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function toast(msg, dur = 3000) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), dur);
+}
+
+function fmt(v, unit = "") {
+  return (v != null && v !== undefined) ? `${v}${unit}` : "—";
+}
+
+// ── Gauge math ────────────────────────────────────────────────────────────────
+const ARC_LEN = 220;
+
+function angleToOffset(deg) {
+  const clamped = Math.max(0, Math.min(180, deg));
+  return ARC_LEN - (clamped / 180) * ARC_LEN;
+}
+
+function polarToXY(deg, r = 70, cx = 80, cy = 80) {
+  const rad = Math.PI - (deg / 180) * Math.PI;
+  return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) };
+}
+
+function updateGauge(angle, correctMin, correctMax, status) {
+  const arc = document.getElementById("gaugeArc");
+  const val = document.getElementById("gaugeValue");
+
+  if (angle == null) {
+    arc.setAttribute("stroke-dashoffset", ARC_LEN);
+    val.textContent = "—°";
+    return;
+  }
+
+  arc.setAttribute("stroke-dashoffset", angleToOffset(angle));
+  const colours = { Correct: "#3fb950", Partial: "#d29922", Incorrect: "#f85149" };
+  arc.setAttribute("stroke", colours[status] || "#58a6ff");
+  val.textContent = `${angle}°`;
+
+  ["markerMin", "markerMax"].forEach((id, i) => {
+    const deg   = i === 0 ? correctMin : correctMax;
+    const inner = polarToXY(deg, 62);
+    const outer = polarToXY(deg, 78);
+    const el    = document.getElementById(id);
+    el.setAttribute("x1", inner.x); el.setAttribute("y1", inner.y);
+    el.setAttribute("x2", outer.x); el.setAttribute("y2", outer.y);
+  });
+}
+
+// ── Render exercise pills + table ─────────────────────────────────────────────
+function renderExercises() {
+  const pills = document.getElementById("exercisePills");
+  const table = document.getElementById("exerciseTable");
+  pills.innerHTML = "";
+  table.innerHTML = "";
+
+  const keys = Object.keys(exercises);
+  if (keys.length === 0) {
+    pills.innerHTML = '<span style="color:var(--red);font-size:.85rem">⚠ No exercises loaded</span>';
+    return;
+  }
+
+  keys.forEach((key, i) => {
+    const cfg = exercises[key];
+
+    // Pill button
+    const pill = document.createElement("button");
+    pill.className   = "pill" + (i === 0 ? " active" : "");
+    pill.textContent = cfg.display_name;
+    pill.dataset.key = key;
+    pill.onclick     = () => selectExercise(key);
+    pills.appendChild(pill);
+
+    // Reference table row
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${cfg.display_name}</td>
+      <td style="text-align:right;color:var(--accent)">${cfg.correct_min}°–${cfg.correct_max}°</td>`;
+    table.appendChild(tr);
+  });
+
+  // Auto-select first exercise
+  selectExercise(keys[0]);
+}
+
+function renderStages(key) {
+  const cfg    = exercises[key];
+  const stages = cfg.stages || [];
+  const wrap   = document.getElementById("stagePills");
+  wrap.innerHTML = "";
+  stages.forEach((s, i) => {
+    const btn = document.createElement("button");
+    btn.className   = "pill" + (i === 0 ? " active" : "");
+    btn.textContent = `S${i + 1}`;
+    btn.title       = s.label;
+    btn.dataset.stage = i;
+    btn.onclick = () => {
+      activeStage = i;
+      wrap.querySelectorAll(".pill").forEach(p => p.classList.toggle("active", +p.dataset.stage === i));
+      const st = (exercises[activeEx]?.stages || [])[i];
+      if (st) document.getElementById("gaugeRange").textContent =
+        `${st.label}: ${st.correct_min}°–${st.correct_max}°`;
+    };
+    wrap.appendChild(btn);
+  });
+  activeStage = 0;
+}
+
+function selectExercise(key) {
+  if (!exercises[key]) return;
+  activeEx = key;
+  document.querySelectorAll(".pill").forEach(p =>
+    p.classList.toggle("active", p.dataset.key === key)
+  );
+  const cfg = exercises[key];
+  const s0  = (cfg.stages && cfg.stages[0]) || cfg;
+  document.getElementById("gaugeRange").textContent =
+    `Stage 1 range: ${s0.correct_min}°–${s0.correct_max}°`;
+  renderStages(key);
+}
+
+// ── Session control ───────────────────────────────────────────────────────────
+document.getElementById("btnStart").onclick = async () => {
+  if (!activeEx) { toast("Select an exercise first"); return; }
+
+  try {
+    const res = await fetch("/session/start", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ exercise: activeEx, camera: 0, stage: activeStage }),
+    });
+    if (!res.ok) { toast("Failed to start session"); return; }
+  } catch (err) {
+    toast("Server error: " + err.message); return;
+  }
+
+  sessionLive = true;
+  document.getElementById("btnStart").disabled = true;
+  document.getElementById("btnStop").disabled  = false;
+  document.getElementById("liveDot").classList.add("live");
+  document.getElementById("headerExercise").textContent =
+    exercises[activeEx]?.display_name || activeEx;
+
+  const feed = document.getElementById("videoFeed");
+  feed.src   = "/video_feed?t=" + Date.now();
+  feed.style.display = "block";
+  document.getElementById("videoPlaceholder").style.display = "none";
+
+  startSSE();
+  toast("Session started ▶");
+};
+
+document.getElementById("btnStop").onclick = async () => {
+  try {
+    const res  = await fetch("/session/stop", { method: "POST" });
+    const data = await res.json();
+    if (data.summary) showSummary(data.summary);
+    toast(`Session saved ✓  Reps: ${data.summary?.total_reps ?? 0}`);
+  } catch (err) {
+    toast("Stop error: " + err.message);
+  }
+
+  sessionLive = false;
+  document.getElementById("btnStart").disabled = false;
+  document.getElementById("btnStop").disabled  = true;
+  document.getElementById("liveDot").classList.remove("live");
+
+  if (evtSource) { evtSource.close(); evtSource = null; }
+
+  const feed = document.getElementById("videoFeed");
+  feed.style.display = "none";
+  feed.src = "";
+  document.getElementById("videoPlaceholder").style.display = "flex";
+};
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+function startSSE() {
+  if (evtSource) evtSource.close();
+  evtSource = new EventSource("/events");
+  evtSource.onmessage = (e) => updateUI(JSON.parse(e.data));
+  evtSource.onerror   = () => { if (!sessionLive) evtSource.close(); };
+}
+
+// ── Rep counter update ───────────────────────────────────────────────────────────────
+const RING_CIRC = 251;  // 2πr where r=40
+
+const STATE_LABELS = {
+  rest:     "\u25cf Rest",
+  moving:   "\u25b2 Moving",
+  holding:  "\u23f3 Holding",
+  complete: "\u2713 Complete",
+};
+
+function updateRepCounter(reps, holdProgress, repState, strainEvents) {
+  // Ring number
+  document.getElementById("repCount").textContent = reps ?? 0;
+
+  // Hold ring fill
+  const hp     = holdProgress ?? 0;
+  const offset = RING_CIRC - hp * RING_CIRC;
+  const ring   = document.getElementById("repRing");
+  ring.setAttribute("stroke-dashoffset", offset);
+
+  // Ring colour by state
+  const ringColors = { rest: "#30363d", moving: "#d29922", holding: "#58a6ff", complete: "#3fb950" };
+  ring.setAttribute("stroke", ringColors[repState] || "#58a6ff");
+
+  // State badge
+  const badge = document.getElementById("repStateBadge");
+  badge.className = `rep-state-badge state-${repState || "rest"}`;
+  badge.innerHTML = STATE_LABELS[repState] || "\u25cf Rest";
+
+  // Hold bar
+  document.getElementById("repHoldPct").textContent = `${Math.round(hp * 100)}%`;
+  document.getElementById("repHoldBar").style.width  = `${hp * 100}%`;
+
+  // Strain
+  document.getElementById("repStrain").textContent = strainEvents ?? 0;
+}
+
+// ── UI update ─────────────────────────────────────────────────────────────────
+function updateUI(d) {
+  const cfg = exercises[d.exercise_name] || {};
+
+  const badge = document.getElementById("statusBadge");
+  badge.className = "status-badge";
+  if (d.status === "Correct")   badge.classList.add("correct");
+  if (d.status === "Partial")   badge.classList.add("partial");
+  if (d.status === "Incorrect") badge.classList.add("incorrect");
+  const icons = { Correct: "✓", Partial: "~", Incorrect: "✗" };
+  badge.textContent = d.detected
+    ? `${icons[d.status] || ""} ${d.status}`
+    : "No person detected";
+
+  document.getElementById("feedbackText").textContent =
+    d.feedback || "Waiting for detection…";
+
+  updateGauge(d.angle, cfg.correct_min, cfg.correct_max, d.status);
+
+  updateRepCounter(d.reps, d.hold_progress, d.rep_state, d.strain_events);
+
+  const m = d.metrics || {};
+  document.getElementById("statReps").textContent     = d.reps ?? 0;
+  document.getElementById("statPeak").textContent     = fmt(m.peak_angle, "°");
+  document.getElementById("statDuration").textContent = fmt(m.duration_sec, "s");
+  document.getElementById("statAvgAngle").textContent = fmt(m.average_angle, "°");
+  document.getElementById("statFrames").textContent   = m.frames_tracked ?? 0;
+  document.getElementById("statStrain").textContent   = d.strain_events ?? 0;
+
+  const acc = m.accuracy_pct ?? 0;
+  document.getElementById("accPct").textContent = `${acc}%`;
+  document.getElementById("accBar").style.width = `${acc}%`;
+
+  // Hold progress bar
+  const hp = d.hold_progress ?? 0;
+  document.getElementById("holdPct").textContent  = `${Math.round(hp * 100)}%`;
+  document.getElementById("holdBar").style.width  = `${hp * 100}%`;
+
+  // Strain badge
+  const strainBadge = document.getElementById("strainBadge");
+  strainBadge.style.display = (d.strain_events > 0) ? "inline-flex" : "none";
+
+  if (d.body_info) updateBodyInfo(d.body_info);
+}
+
+function updateBodyInfo(b) {
+  const track  = document.getElementById("calibTrack");
+  const bar    = document.getElementById("calibBar");
+  const status = document.getElementById("calibStatus");
+  const grid   = document.getElementById("bodyGrid");
+
+  if (!b.calibrated) {
+    const pct = Math.min(100, Math.round((b.frames_seen / 30) * 100));
+    track.style.display  = "block";
+    grid.style.display   = "none";
+    bar.style.width      = pct + "%";
+    status.textContent   = `Analysing body shape… ${pct}%`;
+    status.style.display = "block";
+  } else {
+    track.style.display  = "none";
+    status.style.display = "none";
+    grid.style.display   = "grid";
+    document.getElementById("bBuild").textContent     = b.body_label    || "—";
+    document.getElementById("bShoulders").textContent = b.shoulder_type || "—";
+    document.getElementById("bArms").textContent      = b.limb_type     || "—";
+    const offset = b.angle_offset ?? 0;
+    const sign   = offset >= 0 ? "+" : "";
+    const el     = document.getElementById("bOffset");
+    el.textContent  = offset !== 0 ? `${sign}${offset}° adjusted` : "No adjustment";
+    el.style.color  = offset < 0 ? "#3fb950" : offset > 0 ? "#d29922" : "var(--accent)";
+  }
+}
+
+function showSummary(s) {
+  updateRepCounter(s.total_reps, 0, "rest", s.strain_events ?? 0);
+  document.getElementById("statReps").textContent     = s.total_reps;
+  document.getElementById("statPeak").textContent     = fmt(s.peak_angle, "°");
+  document.getElementById("statDuration").textContent = `${s.duration_sec}s`;
+  document.getElementById("statAvgAngle").textContent = `${s.average_angle}°`;
+  document.getElementById("statFrames").textContent   = s.frames_tracked;
+  document.getElementById("statStrain").textContent   = s.strain_events ?? 0;
+  const acc = s.accuracy_pct ?? 0;
+  document.getElementById("accPct").textContent = `${acc}%`;
+  document.getElementById("accBar").style.width = `${acc}%`;
+}
+
+// ── Init — runs synchronously, no async needed ────────────────────────────────
+renderExercises();
+</script>
+</body>
+</html>
