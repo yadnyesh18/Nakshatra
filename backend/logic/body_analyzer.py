@@ -2,11 +2,13 @@
 logic/body_analyzer.py
 Analyses body proportions from MediaPipe landmarks to produce a BodyProfile
 that drives adaptive skeleton rendering and rehab threshold adjustment.
+
+Added: compute_torso_lean() — per-frame lateral lean detection for posture validation.
 """
 
 import numpy as np
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from mediapipe.tasks.python.vision import PoseLandmark
 
 _LM = PoseLandmark
@@ -25,6 +27,9 @@ IDX = {
 }
 
 _CALIB_FRAMES = 30
+
+# Lean angle above this (degrees from vertical) → compensation detected
+_LEAN_THRESHOLD = 10.0
 
 
 @dataclass
@@ -130,6 +135,72 @@ class BodyAnalyzer:
         for buf in self._buf.values():
             buf.clear()
         self.profile = BodyProfile()
+
+    # ── Torso lean (called per-frame from ExerciseClassifier) ─────────────────
+
+    @staticmethod
+    def compute_torso_lean(landmarks: list, frame_shape: tuple) -> dict:
+        """
+        Compute lateral torso lean angle from shoulder and hip midpoints.
+
+        The torso vector runs from hip-midpoint → shoulder-midpoint.
+        Lean is measured as the angle between this vector and vertical (0°=upright).
+
+        Args:
+            landmarks:   pose_landmarks[0] from MediaPipe result.
+            frame_shape: (h, w, ...) of the current frame.
+        Returns:
+            dict with:
+                lean_angle  (float) — degrees from vertical (0 = upright)
+                is_leaning  (bool)  — True if lean > _LEAN_THRESHOLD
+                direction   (str)   — "left" | "right" | "upright"
+        """
+        h, w = frame_shape[:2]
+
+        def _px(idx_name: str):
+            idx = IDX.get(idx_name)
+            if idx is None or idx >= len(landmarks):
+                return None
+            lm = landmarks[idx]
+            if hasattr(lm, "visibility") and lm.visibility < 0.4:
+                return None
+            return np.array([lm.x * w, lm.y * h])
+
+        ls = _px("left_shoulder")
+        rs = _px("right_shoulder")
+        lh = _px("left_hip")
+        rh = _px("right_hip")
+
+        if any(p is None for p in [ls, rs, lh, rh]):
+            return {"lean_angle": 0.0, "is_leaning": False, "direction": "upright"}
+
+        shoulder_mid = (ls + rs) / 2
+        hip_mid      = (lh + rh) / 2
+
+        # Torso vector: hip → shoulder (pointing upward in image = negative y)
+        torso_vec = shoulder_mid - hip_mid
+
+        # Vertical reference in image coords: (0, -1) = straight up
+        vertical  = np.array([0.0, -1.0])
+
+        # Angle between torso vector and vertical
+        denom     = np.linalg.norm(torso_vec) + 1e-6
+        cosine    = np.dot(torso_vec / denom, vertical)
+        lean_deg  = float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
+
+        # Direction: positive x-component of torso = leaning right in image
+        # (mirrored feed: right in image = patient's left)
+        direction = "upright"
+        if lean_deg > _LEAN_THRESHOLD:
+            direction = "right" if torso_vec[0] > 0 else "left"
+
+        return {
+            "lean_angle": round(lean_deg, 1),
+            "is_leaning": lean_deg > _LEAN_THRESHOLD,
+            "direction":  direction,
+        }
+
+    # ── Internal ──────────────────────────────────────────────────────────────
 
     def _lock_profile(self) -> None:
         p = self.profile

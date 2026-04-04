@@ -185,7 +185,8 @@ def _camera_worker(exercise: str, camera_index: int = 0, stage: int = 0) -> None
             }
 
         strain    = result.get("strain_warning", False)
-        rep_state = _rep_counter.update(result.get("status") or "", strain)
+        form_score = result.get("form_score", {}).get("total", 100)
+        rep_state = _rep_counter.update(result.get("status") or "", strain, form_score)
         _session.update(result["angle"], result["status"], rep_state)
         summary   = _session.get_summary()
 
@@ -218,6 +219,9 @@ def _camera_worker(exercise: str, camera_index: int = 0, stage: int = 0) -> None
                 "strain_events":  rep_state["strain_events"],
                 "metrics":        summary,
                 "body_info":      body_info,
+                "form_score":     result.get("form_score",   {"total": 0, "grade": "Needs Improvement", "breakdown": {}}),
+                "angle_metrics":  result.get("angle_metrics", {}),
+                "torso_lean":     result.get("torso_lean",    {}),
             }
 
     cap.release()

@@ -1,13 +1,13 @@
 """
-main.py — Single entry point for the Rehab Pose Tracker.
+main1.py — Single entry point for the Rehab Pose Tracker.
 
 Usage
 -----
-  python main.py                              # web mode, opens browser
-  python main.py --port 8080                  # web mode, custom port
-  python main.py --cli                        # headless CLI
-  python main.py --cli --exercise arm_raise --stage 1
-  python main.py --list                       # print all exercises
+  python main1.py                              # web mode, opens browser
+  python main1.py --port 8080                  # web mode, custom port
+  python main1.py --cli                        # headless CLI
+  python main1.py --cli --exercise arm_raise --stage 1
+  python main1.py --list                       # print all exercises
 """
 
 import argparse
