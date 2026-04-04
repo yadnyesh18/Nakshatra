@@ -40,6 +40,10 @@ _WEB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "
 
 app = FastAPI(title="Rehab Pose Tracker", version="2.0.0")
 
+from api.session_manager import router as session_manager_router
+from api.cognitive_service import router as cognitive_router
+app.include_router(session_manager_router)
+app.include_router(cognitive_router, prefix="/api/cognitive")
 
 class _SafeEncoder(json.JSONEncoder):
     """Converts numpy scalars to native Python types for JSON serialisation."""
@@ -338,18 +342,25 @@ def get_ai_coaching(body: CoachRequest):
         exercise_config = EXERCISES.get(body.exercise, {})
         stages = exercise_config.get("stages", [{}])
         
-        # Safely get correct_max from the first stage, fallback to 180
-        target = stages.get("correct_max", 180) if stages else 180
+        # --- THIS IS THE FIXED LINE ---
+        target = 180
+        # ------------------------------
         
-        feedback = generate_live_physical_feedback(
-            exercise=body.exercise,
-            target=int(target),
-            achieved=int(body.avg_angle),
-            issues=issues
+        feedback_obj = get_personalized_physical_feedback(
+            patient_id="demo_patient_01",
+            exercise_name=body.exercise,
+            target_angle=int(target),
+            achieved_angle=int(body.avg_angle),
+            reps=body.reps,
+            form_issues=issues
         )
-        return {"coach_feedback": feedback}
+        return {"coach_feedback": feedback_obj.message, "alert": feedback_obj.alert}
+        
     except Exception as e:
-        # It is helpful to print the error to the terminal during the hackathon so you know WHY it failed
+        print(f"Coach endpoint error: {e}") 
+        return {"coach_feedback": "Keep up the good work! Focus on your form."}
+        
+    except Exception as e:
         print(f"Coach endpoint error: {e}") 
         return {"coach_feedback": "Keep up the good work! Focus on your form."}
 
